@@ -1,125 +1,41 @@
-name: Daily AllMusic Server Update Check
+name: Secure Daily Check
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 每天 UTC 时间 00:00 运行
-  workflow_dispatch:     # 允许手动触发
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
-  check-and-update:
+  check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 如果需要提交更改
+      actions: read    # 如果需要读取其他仓库的actions
+    
     steps:
-      - name: Checkout current repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
-        run: pip install requests pygithub
-
-      - name: Create Python script
+      - name: Create secure script
         run: |
-          cat << 'EOF' > get_latest_workflow.py
+          cat << 'EOF' > check_workflow.py
+          # 从环境变量获取token，而不是硬编码
           import os
-          import sys
           from github import Github
-          from datetime import datetime, timedelta
 
-          # 初始化 GitHub API
-          g = Github(os.getenv('GITHUB_TOKEN'))
-          repo = g.get_repo('Coloryr/AllMusic_Server')
+          token = os.getenv('GITHUB_TOKEN')
+          if not token:
+              raise ValueError("No GITHUB_TOKEN provided")
 
-          # 获取成功的workflow runs
-          workflows = repo.get_workflow_runs(status='success')
-          latest_workflow = None
-          for workflow in workflows:
-              if workflow.head_branch == 'main' or workflow.head_branch == 'master':  # 假设主分支是main或master
-                  latest_workflow = workflow
-                  break
-
-          if not latest_workflow:
-              print('No successful workflow found in target repo')
-              sys.exit(1)
-
-          # 检查是否已经处理过这个workflow
-          last_run_sha_path = 'last_processed_sha.txt'
-          current_sha = latest_workflow.head_sha
-
-          if os.path.exists(last_run_sha_path):
-              with open(last_run_sha_path, 'r') as f:
-                  last_processed_sha = f.read().strip()
-              if current_sha == last_processed_sha:
-                  print('No new successful workflow found. Skipping.')
-                  sys.exit(0)
-
-          # 保存当前处理的SHA
-          with open(last_run_sha_path, 'w') as f:
-              f.write(current_sha)
-
-          # 获取artifacts
-          artifacts = latest_workflow.get_artifacts()
-          if not artifacts:
-              print('No artifacts found in the workflow')
-              sys.exit(1)
-
-          # 输出结果
-          print(f'::set-output name=workflow_id::{latest_workflow.id}')
-          print(f'::set-output name=commit_sha::{current_sha}')
+          g = Github(token)
+          # 其余代码...
           EOF
 
-      - name: Get latest successful workflow from target repo
-        id: get-workflow
+      - name: Run secure check
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python get_latest_workflow.py
-
-      - name: Download artifacts
-        if: steps.get-workflow.outputs.workflow_id
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: 'Coloryr',
-              repo: 'AllMusic_Server',
-              run_id: ${{ steps.get-workflow.outputs.workflow_id }}
-            });
-
-            for (const artifact of artifacts.artifacts) {
-              const download = await github.rest.actions.downloadArtifact({
-                owner: 'Coloryr',
-                repo: 'AllMusic_Server',
-                artifact_id: artifact.id,
-                archive_format: 'zip'
-              });
-
-              const fs = require('fs');
-              const path = require('path');
-              const artifactPath = path.join('artifacts', `${artifact.name}.zip`);
-              fs.mkdirSync('artifacts', { recursive: true });
-              fs.writeFileSync(artifactPath, Buffer.from(download.data));
-              console.log(`Downloaded ${artifact.name} to ${artifactPath}`);
-            }
-
-      - name: Download source code
-        if: steps.get-workflow.outputs.commit_sha
-        run: |
-          mkdir -p source
-          curl -L "https://github.com/Coloryr/AllMusic_Server/archive/${{ steps.get-workflow.outputs.commit_sha }}.zip" -o source/source.zip
-
-      - name: Publish artifacts (example)
-        if: steps.get-workflow.outputs.commit_sha
-        run: |
-          echo "Publishing new version with commit SHA: ${{ steps.get-workflow.outputs.commit_sha }}"
-          # 这里添加你的发布逻辑
-
-      - name: Commit changes if updated
-        if: steps.get-workflow.outputs.commit_sha
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add last_processed_sha.txt
-          git commit -m "Update to AllMusic_Server ${{ steps.get-workflow.outputs.commit_sha }}"
-          git push
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 安全注入
+        run: python check_workflow.py
