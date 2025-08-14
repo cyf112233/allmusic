@@ -20,12 +20,11 @@ jobs:
       - name: Install dependencies
         run: pip install requests pygithub
 
-      - name: Get latest successful workflow from target repo
-        id: get-workflow
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Python script
         run: |
+          cat << 'EOF' > get_latest_workflow.py
           import os
+          import sys
           from github import Github
           from datetime import datetime, timedelta
 
@@ -33,7 +32,7 @@ jobs:
           g = Github(os.getenv('GITHUB_TOKEN'))
           repo = g.get_repo('Coloryr/AllMusic_Server')
 
-          # 获取最近24小时内成功的workflow runs
+          # 获取成功的workflow runs
           workflows = repo.get_workflow_runs(status='success')
           latest_workflow = None
           for workflow in workflows:
@@ -43,7 +42,7 @@ jobs:
 
           if not latest_workflow:
               print('No successful workflow found in target repo')
-              exit(1)
+              sys.exit(1)
 
           # 检查是否已经处理过这个workflow
           last_run_sha_path = 'last_processed_sha.txt'
@@ -54,7 +53,7 @@ jobs:
                   last_processed_sha = f.read().strip()
               if current_sha == last_processed_sha:
                   print('No new successful workflow found. Skipping.')
-                  exit(0)
+                  sys.exit(0)
 
           # 保存当前处理的SHA
           with open(last_run_sha_path, 'w') as f:
@@ -64,13 +63,18 @@ jobs:
           artifacts = latest_workflow.get_artifacts()
           if not artifacts:
               print('No artifacts found in the workflow')
-              exit(1)
+              sys.exit(1)
 
-          # 准备下载URLs
-          artifact_names = [art.name for art in artifacts]
-          print(f'Found artifacts: {", ".join(artifact_names)}')
+          # 输出结果
           print(f'::set-output name=workflow_id::{latest_workflow.id}')
           print(f'::set-output name=commit_sha::{current_sha}')
+          EOF
+
+      - name: Get latest successful workflow from target repo
+        id: get-workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python get_latest_workflow.py
 
       - name: Download artifacts
         if: steps.get-workflow.outputs.workflow_id
@@ -109,11 +113,7 @@ jobs:
         if: steps.get-workflow.outputs.commit_sha
         run: |
           echo "Publishing new version with commit SHA: ${{ steps.get-workflow.outputs.commit_sha }}"
-          # 这里添加你的发布逻辑，例如：
-          # - 解压 artifacts
-          # - 构建
-          # - 发布到服务器或其他位置
-          # 具体逻辑取决于你的发布需求
+          # 这里添加你的发布逻辑
 
       - name: Commit changes if updated
         if: steps.get-workflow.outputs.commit_sha
