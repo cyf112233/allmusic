@@ -1,6 +1,5 @@
 # 🎵 AllMusic Auto Sync — 自动抓取并发布 AllMusic 服务端 & 客户端 🚀
-
-![cron](https://img.shields.io/badge/schedule-daily-blue) ![release](https://img.shields.io/badge/release-auto-green) ![license](https://img.shields.io/badge/license-MIT-orange)
+<br>
 
 欢迎来到 AllMusic Auto Sync —— 一个自动化工作流项目，它会每天检查并抓取（拉取）来自 Coloryr/AllMusic_Server 的最新成功构建与源码（服务端 & 客户端），并在本仓库中自动创建 Release 发布构建产物与源码包。想像一台永不停歇的流水线，把最新稳定构建镜像带到你仓库的 Releases 页面 ✨
 
