@@ -9,8 +9,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 如果需要提交更改
-      actions: read    # 如果需要读取其他仓库的actions
+      contents: write
+      actions: read
     
     steps:
       - uses: actions/checkout@v4
@@ -19,23 +19,53 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+          cache: 'pip'  # 添加缓存加速依赖安装
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyGithub requests
+          pip list  # 验证安装的包
 
       - name: Create secure script
         run: |
           cat << 'EOF' > check_workflow.py
-          # 从环境变量获取token，而不是硬编码
           import os
+          import sys
           from github import Github
 
-          token = os.getenv('GITHUB_TOKEN')
-          if not token:
-              raise ValueError("No GITHUB_TOKEN provided")
+          def main():
+              try:
+                  token = os.getenv('GITHUB_TOKEN')
+                  if not token:
+                      raise ValueError("GITHUB_TOKEN environment variable not set")
+                  
+                  print("Initializing GitHub client...")
+                  g = Github(token)
+                  
+                  print("Getting repository...")
+                  repo = g.get_repo('Coloryr/AllMusic_Server')
+                  
+                  print("Getting workflow runs...")
+                  workflows = repo.get_workflow_runs(status='success')
+                  
+                  print(f"Found {workflows.totalCount} successful workflows")
+                  for workflow in workflows:
+                      print(f"Workflow ID: {workflow.id}, SHA: {workflow.head_sha}")
+                  
+                  return 0
+              except Exception as e:
+                  print(f"Error: {str(e)}", file=sys.stderr)
+                  return 1
 
-          g = Github(token)
-          # 其余代码...
+          if __name__ == "__main__":
+              sys.exit(main())
           EOF
 
       - name: Run secure check
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 安全注入
-        run: python check_workflow.py
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Running script..."
+          python check_workflow.py
+          echo "Script completed with exit code $?"
