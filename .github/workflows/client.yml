@@ -75,7 +75,7 @@ jobs:
           echo "Found latest successful run: id=$run_id run_number=$run_number sha=$head_sha name='$run_name' created_at=$created_at"
 
           # 检查本地记录，避免重复发布
-          LAST_FILE=".last_release_source_run"
+          LAST_FILE=".last_release_source_run2"
           last=""
           if [ -f "$LAST_FILE" ]; then
             last=$(cat "$LAST_FILE" | tr -d '[:space:]' || true)
